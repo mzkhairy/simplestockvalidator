@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Stock Claim Validator</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      position: relative;
+      min-height: 100vh;
+      box-sizing: border-box;
+      padding-bottom: 80px;
+    }
+    #question { font-weight: bold; margin-bottom: 10px; }
+    #result, #evidenceBox, #calculationBox { margin-top: 20px; white-space: pre; font-size: 16px; }
+    #explanation { 
+      padding: 10px; 
+      border-left: 4px solid #ccc;
+      background-color: #f8f8f8;
+      margin: 20px 0;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      hyphens: auto;
+      white-space: pre-wrap;
+      font-size: 16px;
+    }
+    button { margin-top: 10px; }
+    #restartBtn, #copyEvidenceBtn, #copyCalculationBtn { display: none; margin-right: 10px; }
+    textarea { position: absolute; left: -9999px; }
+    footer {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      font-size: 12px;
+      color: #777;
+    }
+    #logsContainer {
+      margin-top: 30px;
+      max-height: 200px;
+      overflow-y: auto;
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 10px;
+      font-size: 12px;
+    }
+    .logItem {
+      cursor: pointer;
+      margin-bottom: 5px;
+      padding: 3px;
+    }
+    .logItem:hover {
+      background-color: #e0e0e0;
+    }
+    .logHeading {
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .outputSection {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      padding: 10px;
+      background-color: #f9f9f9;
+      min-height: 50px;
+      height: auto;
+      overflow: auto;
+    }
+    .sectionTitle {
+      font-weight: bold;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #helpBtn {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    #helpBtn:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h5>Simple Stock Claim Validator</h5>
+    <button id="helpBtn" onclick="openHelp()">How to Use</button>
+  </div>
+
+  <div id="question">What is the stock heading? (name, ticker, etc.)</div>
+  <input type="text" id="input">
+  <button onclick="next()">Continue</button>
+
+  <div id="result"></div>
+  <div id="explanation"></div>
+  
+  <div class="outputSection">
+    <div class="sectionTitle">Evidence</div>
+    <div id="evidenceBox"></div>
+  </div>
+  
+  <div class="outputSection">
+    <div class="sectionTitle">Calculation</div>
+    <div id="calculationBox"></div>
+  </div>
+  
+  <button id="copyEvidenceBtn" onclick="copyEvidence()">Copy Evidence</button>
+  <button id="copyCalculationBtn" onclick="copyCalculation()">Copy Calculation</button>
+  <button id="restartBtn" onclick="restart()">Restart</button>
+
+  <div id="logsContainer">
+    <div class="logHeading">Steps Log:</div>
+    <div id="logsList"></div>
+  </div>
+
+  <textarea id="hiddenCopy"></textarea>
+  
+  <footer>credit to RKR034</footer>
+
+  <script>
+    let step = 0;
+    const state = {};
+    const logs = [];
+    const questions = [
+      "What is the stock heading? (name, ticker, etc.)",
+      "What is the current date? (e.g., Apr 17, 2025)",
+      "What is the current high value?",
+      "What is the current low value?",
+      "What is the current closing value?",
+      "What is the previous date? (e.g., Apr 16, 2025)",
+      "What was the previous closing value?",
+      "Do you have a claim value? (yes/no)",
+      "What is the claimed value?",
+      "What is the claimed percentage? (don't type the %, use ' - ' if it's decreasing)",
+      "What is the claimed percentage? (don't type the %, use ' - ' if it's decreasing)" // Duplicate for step 10
+    ];
+
+    document.getElementById("input").addEventListener("keyup", function(e) {
+      if (e.key === "Enter") next();
+    });
+
+    function openHelp() {
+      window.open("https://claude.site/artifacts/8339c34d-917c-4f8f-862a-fb85d1643717", "_blank");
+    }
+
+    // Function to parse input values with or without commas
+    function parseInputValue(input) {
+      // Remove any commas from the input
+      return parseFloat(input.replace(/,/g, ''));
+    }
+
+    // Function to format numbers with comma separators
+    function formatNumber(num) {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function next() {
+      const input = document.getElementById("input").value.trim();
+      const question = document.getElementById("question");
+      const result = document.getElementById("result");
+
+      if (!input) return alert("Please provide input.");
+
+      // Only add to logs for steps 0-7 (stop at "Do you have a claim value?")
+      if (step <= 7) {
+        addToLogs(step, input);
+      }
+
+      switch (step) {
+        case 0:
+          state.stockHeading = input;
+          question.innerText = questions[1];  // Current date
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 1:
+          state.currentDate = input;
+          question.innerText = questions[2];  // Current high
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 2:
+          state.high = parseInputValue(input);
+          question.innerText = questions[3];  // Current low
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 3:
+          state.low = parseInputValue(input);
+          question.innerText = questions[4];  // Current close
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 4:
+          state.close = parseInputValue(input);
+          question.innerText = questions[5];  // Previous date
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 5:
+          state.prevDate = input;
+          question.innerText = questions[6];  // Previous close
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 6:
+          state.prevClose = parseInputValue(input);
+          question.innerText = questions[7];  // Has claim value?
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 7:
+          const ans = input.toLowerCase();
+          if (ans !== 'yes' && ans !== 'no') return alert("Type 'yes' or 'no'");
+          state.hasClaim = ans;
+          document.getElementById("input").value = '';
+          if (ans === 'yes') {
+            question.innerText = questions[8];  // Claimed value
+            step = 8;
+          } else {
+            question.innerText = questions[10];  // Claimed percentage (step 10)
+            step = 10;
+          }
+          break;
+
+        case 8:
+          state.claimValue = parseInputValue(input);
+          question.innerText = questions[9];  // Claimed percentage
+          document.getElementById("input").value = '';
+          step++; break;
+
+        case 9:
+          state.claimPercent = parseFloat(input);
+          processClaimValue();
+          break;
+
+        case 10:
+          state.claimPercent = parseFloat(input);
+          processClaimPercentageRange();
+          break;
+      }
+    }
+
+    function processClaimValue() {
+      const result = document.getElementById("result");
+      const explanation = document.getElementById("explanation");
+      const evidenceBox = document.getElementById("evidenceBox");
+      const calculationBox = document.getElementById("calculationBox");
+
+      const calculated = ((state.claimValue - state.prevClose) / state.prevClose) * 100;
+      const rounded = Math.round(calculated * 10) / 10;
+
+      let correctness = '';
+      let explanationText = '';
+      
+      if (state.claimValue < state.low || state.claimValue > state.high) {
+        correctness = "Incorrect - Major Issue";
+        explanationText = `The claimed value (${formatNumber(state.claimValue)}) is outside the day's trading range (${formatNumber(state.low)} - ${formatNumber(state.high)}), which makes this claim impossible.`;
+      } else if (rounded.toFixed(1) == state.claimPercent.toFixed(1)) {
+        correctness = "Correct";
+        explanationText = `The percentage calculation matches the claimed percentage. The calculated percentage is ${rounded.toFixed(1)}%, which matches the claimed ${state.claimPercent.toFixed(1)}%.`;
+      } else if (Math.abs(calculated - state.claimPercent) > 5) {
+        correctness = "Incorrect - Major Issue";
+        explanationText = `The calculated percentage (${calculated.toFixed(2)}%) is significantly different from the claimed percentage (${state.claimPercent}%), with a difference of more than 5 percentage points.`;
+      } else {
+        correctness = "Incorrect - Minor Issue";
+        explanationText = `The calculated percentage (${calculated.toFixed(2)}%) is slightly different from the claimed percentage (${state.claimPercent}%), but within 5 percentage points.`;
+      }
+
+      result.innerText = `Correctness: ${correctness}`;
+      explanation.innerText = explanationText;
+      
+      const pctChange = ((state.claimValue - state.prevClose) / state.prevClose * 100).toFixed(2);
+      const claimPctChange = ((state.claimValue - state.prevClose) / state.prevClose * 100).toFixed(2);
+
+      // Format evidence output according to the new format
+      const evidenceOutput = [
+        `${state.stockHeading}`,
+        ``,
+        `Date ${state.currentDate}`,
+        `High ${formatNumber(state.high)}`,
+        `Low ${formatNumber(state.low)}`,
+        `Close ${formatNumber(state.close)}`,
+        ``,
+        `Date ${state.prevDate}`,
+        `Close ${formatNumber(state.prevClose)}`
+      ];
+      
+      if (correctness !== "Correct") {
+        evidenceOutput.push(`Percentage Change ${claimPctChange > 0 ? '' : '-'}${Math.abs(claimPctChange)}%`);
+      }
+
+      evidenceBox.innerText = evidenceOutput.join('\n');
+
+      // Format calculation output
+      calculationBox.innerText = `Percentage Change = [(${formatNumber(state.claimValue)} - ${formatNumber(state.prevClose)}) / ${formatNumber(state.prevClose)}] x 100 = ${pctChange}%`;
+
+      // Add result to logs
+      addResultToLogs("Result", correctness);
+
+      showFinal();
+    }
+
+    function processClaimPercentageRange() {
+      const result = document.getElementById("result");
+      const explanation = document.getElementById("explanation");
+      const evidenceBox = document.getElementById("evidenceBox");
+      const calculationBox = document.getElementById("calculationBox");
+
+      const upper = ((state.high - state.prevClose) / state.prevClose) * 100;
+      const lower = ((state.low - state.prevClose) / state.prevClose) * 100;
+      const cp = state.claimPercent;
+      const nearLower = Math.abs(cp - lower) < Math.abs(cp - upper);
+
+      let correctness = '';
+      let explanationText = '';
+      
+      if (cp >= lower && cp <= upper) {
+        correctness = "Correct";
+        explanationText = `The claimed percentage (${cp}%) is within the possible range for the day (${lower.toFixed(2)}% to ${upper.toFixed(2)}%).`;
+      } else {
+        if (nearLower) {
+          if (cp < (lower - 5)) {
+            correctness = "Incorrect - Major Issue";
+            explanationText = `The claimed percentage (${cp}%) is significantly below the lowest possible percentage for the day (${lower.toFixed(2)}%), with a difference of more than 5 percentage points.`;
+          } else {
+            correctness = "Incorrect - Minor Issue";
+            explanationText = `The claimed percentage (${cp}%) is slightly below the lowest possible percentage for the day (${lower.toFixed(2)}%), but within 5 percentage points.`;
+          }
+        } else {
+          if (cp > (upper + 5)) {
+            correctness = "Incorrect - Major Issue";
+            explanationText = `The claimed percentage (${cp}%) is significantly above the highest possible percentage for the day (${upper.toFixed(2)}%), with a difference of more than 5 percentage points.`;
+          } else {
+            correctness = "Incorrect - Minor Issue";
+            explanationText = `The claimed percentage (${cp}%) is slightly above the highest possible percentage for the day (${upper.toFixed(2)}%), but within 5 percentage points.`;
+          }
+        }
+      }
+
+      result.innerText = `Correctness: ${correctness}`;
+      explanation.innerText = explanationText;
+
+      // Format evidence output according to the new format
+      const evidenceOutput = [
+        `${state.stockHeading}`,
+        ``,
+        `Date ${state.currentDate}`,
+        `High ${formatNumber(state.high)}`,
+        `Low ${formatNumber(state.low)}`,
+        `Close ${formatNumber(state.close)}`,
+        ``,
+        `Date ${state.prevDate}`,
+        `Close ${formatNumber(state.prevClose)}`
+      ];
+      
+      // Add Day Range when it has no claim value (always add for this path)
+      evidenceOutput.push(`Day Range ${lower.toFixed(2)}% to ${upper.toFixed(2)}%`);
+
+      evidenceBox.innerText = evidenceOutput.join('\n');
+
+      // Format calculation output
+      const calculationOutput = [
+        `Upper Limit = [(${formatNumber(state.high)} - ${formatNumber(state.prevClose)}) / ${formatNumber(state.prevClose)}] x 100 = ${upper.toFixed(2)}%`,
+        `Lower Limit = [(${formatNumber(state.low)} - ${formatNumber(state.prevClose)}) / ${formatNumber(state.prevClose)}] x 100 = ${lower.toFixed(2)}%`
+      ];
+
+      calculationBox.innerText = calculationOutput.join('\n');
+
+      // Add result to logs
+      addResultToLogs("Result", correctness);
+
+      showFinal();
+    }
+
+    function showFinal() {
+      document.getElementById("question").style.display = "none";
+      document.getElementById("input").style.display = "none";
+      document.querySelector("button").style.display = "none";
+      document.getElementById("restartBtn").style.display = "inline-block";
+      document.getElementById("copyEvidenceBtn").style.display = "inline-block";
+      document.getElementById("copyCalculationBtn").style.display = "inline-block";
+    }
+
+    function copyEvidence() {
+      const hidden = document.getElementById("hiddenCopy");
+      hidden.value = document.getElementById("evidenceBox").innerText;
+      hidden.select();
+      document.execCommand("copy");
+      alert("Evidence copied!");
+    }
+
+    function copyCalculation() {
+      const hidden = document.getElementById("hiddenCopy");
+      hidden.value = document.getElementById("calculationBox").innerText;
+      hidden.select();
+      document.execCommand("copy");
+      alert("Calculation copied!");
+    }
+
+    function addToLogs(stepNum, value) {
+      // Create a log record
+      const logRecord = {
+        step: stepNum,
+        question: questions[stepNum],
+        value: value
+      };
+      
+      // Add to logs array
+      if (logs.length > stepNum) {
+        // We're editing an existing step
+        logs[stepNum] = logRecord;
+        // Clear subsequent steps
+        logs.splice(stepNum + 1);
+      } else {
+        logs.push(logRecord);
+      }
+      
+      updateLogsDisplay();
+    }
+
+    function addResultToLogs(question, value) {
+      // Add the final result as a non-editable log entry
+      const logRecord = {
+        step: -1, // Special marker for result
+        question: question,
+        value: value,
+        isResult: true
+      };
+      
+      logs.push(logRecord);
+      updateLogsDisplay();
+    }
+
+    function updateLogsDisplay() {
+      const logsList = document.getElementById("logsList");
+      logsList.innerHTML = '';
+      
+      logs.forEach((log, index) => {
+        const logItem = document.createElement("div");
+        logItem.className = "logItem";
+        logItem.innerHTML = `<strong>${index + 1}.</strong> ${log.question}: ${log.value}`;
+        
+        // Only make regular steps clickable (not results)
+        if (!log.isResult) {
+          logItem.style.cursor = "pointer";
+          logItem.onclick = function() { editStep(index); };
+        } else {
+          logItem.style.fontWeight = "bold";
+          logItem.style.color = log.value.includes("Correct") ? "green" : 
+                               (log.value.includes("Major") ? "red" : "orange");
+        }
+        
+        logsList.appendChild(logItem);
+      });
+    }
+
+    function editStep(stepIndex) {
+      // Don't allow editing the result
+      if (logs[stepIndex].isResult) return;
+      
+      // Load the values up to this step
+      step = stepIndex;
+      const log = logs[stepIndex];
+      
+      // Show input elements
+      document.getElementById("question").style.display = "block";
+      document.getElementById("input").style.display = "block";
+      document.querySelector("button").style.display = "inline-block";
+      document.getElementById("restartBtn").style.display = "none";
+      document.getElementById("copyEvidenceBtn").style.display = "none";
+      document.getElementById("copyCalculationBtn").style.display = "none";
+      document.getElementById("result").innerText = "";
+      document.getElementById("explanation").innerText = "";
+      document.getElementById("evidenceBox").innerText = "";
+      document.getElementById("calculationBox").innerText = "";
+      
+      // Set question and value
+      document.getElementById("question").innerText = log.question;
+      document.getElementById("input").value = log.value;
+      
+      // Restore state based on logs up to step 7
+      state.stockHeading = stepIndex >= 0 && logs[0] ? logs[0].value : '';
+      state.currentDate = stepIndex >= 1 && logs[1] ? logs[1].value : '';
+      state.high = stepIndex >= 2 && logs[2] ? parseInputValue(logs[2].value) : 0;
+      state.low = stepIndex >= 3 && logs[3] ? parseInputValue(logs[3].value) : 0;
+      state.close = stepIndex >= 4 && logs[4] ? parseInputValue(logs[4].value) : 0;
+      state.prevDate = stepIndex >= 5 && logs[5] ? logs[5].value : '';
+      state.prevClose = stepIndex >= 6 && logs[6] ? parseInputValue(logs[6].value) : 0;
+      
+      // Only restore hasClaim if we're editing step 7
+      if (stepIndex === 7 && logs[7]) {
+        state.hasClaim = logs[7].value.toLowerCase();
+      }
+      
+      // Reset all steps after hasClaim if we edit any step
+      state.claimValue = undefined;
+      state.claimPercent = undefined;
+    }
+
+    function restart() {
+      // Clear all logs
+      logs.length = 0;
+      updateLogsDisplay();
+      
+      // Reset everything
+      location.reload();
+    }
+  </script>
+
+</body>
+</html>
